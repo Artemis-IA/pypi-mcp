@@ -1,20 +1,19 @@
 # pypi-mcp
 
-A comprehensive [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server for **PyPI package intelligence** — the most complete MCP server for Python package discovery, dependency analysis, security auditing, and version management.
+A comprehensive [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server for **[PyPI](https://pypi.org) package intelligence** — the most complete MCP server for Python package discovery, dependency analysis, security auditing, and version management.
 
 ## Features
 
-### Tools (18+)
+### Tools
 - **Discovery**: `search_packages`, `get_package_info`, `check_package_exists`
 - **Versions**: `get_latest_version`, `get_package_releases`, `list_package_versions`, `compare_versions`
 - **Dependencies**: `get_dependencies`, `get_dependency_tree`, `resolve_dependencies` (recursive)
-- **Security (OSV)**: `check_vulnerabilities`, `scan_dependency_vulnerabilities`, `security_audit_project`
+- **Security**: `check_vulnerabilities`, `scan_dependency_vulnerabilities`, `security_audit_project`
 - **Project Audit**: `check_requirements_txt`, `check_pyproject_toml`, `check_setup_py`
 - **Statistics**: `get_download_statistics`, `get_download_trends`, `get_top_downloaded_packages`
 - **Compatibility**: `check_python_compatibility`, `get_compatible_python_versions`
 - **Environment**: `analyze_environment_dependencies`, `check_outdated_packages`, `generate_update_plan`
 - **Download**: `download_package` (wheel/sdist to local directory)
-- **Metadata**: `get_package_documentation`, `get_package_changelog`, `get_package_license_info`
 
 ### Resources
 - `resource://pypi/package/{name}` — package metadata
