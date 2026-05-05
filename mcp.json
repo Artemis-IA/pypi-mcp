@@ -1,0 +1,173 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schema/mcp-config.json",
+  "comment": "Configuration templates for connecting pypi-mcp to various MCP clients. Copy the relevant block into your client's MCP settings.",
+  "server_name": "pypi-mcp",
+  "server_description": "Comprehensive PyPI package intelligence server — discovery, dependencies, security, versions",
+  "configurations": {
+    "stdio_uvx": {
+      "comment": "For Claude Desktop, Windsurf, Cursor, Cline — runs via uvx (recommended, no install needed)",
+      "claude_desktop": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "command": "uvx",
+            "args": [
+              "pypi-mcp",
+              "--stdio"
+            ],
+            "env": {
+              "PYTHONUNBUFFERED": "1"
+            }
+          }
+        }
+      },
+      "windsurf": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "command": "uvx",
+            "args": [
+              "pypi-mcp",
+              "--stdio"
+            ],
+            "env": {
+              "PYTHONUNBUFFERED": "1"
+            }
+          }
+        }
+      },
+      "cursor": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "command": "uvx",
+            "args": [
+              "pypi-mcp",
+              "--stdio"
+            ],
+            "env": {
+              "PYTHONUNBUFFERED": "1"
+            }
+          }
+        }
+      }
+    },
+    "stdio_local": {
+      "comment": "For local development — runs from the project directory with uv run",
+      "claude_desktop": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "command": "uv",
+            "args": [
+              "run",
+              "pypi-mcp",
+              "--stdio"
+            ],
+            "env": {
+              "PYTHONUNBUFFERED": "1"
+            }
+          }
+        }
+      },
+      "windsurf": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "command": "uv",
+            "args": [
+              "run",
+              "pypi-mcp",
+              "--stdio"
+            ],
+            "env": {
+              "PYTHONUNBUFFERED": "1"
+            }
+          }
+        }
+      }
+    },
+    "streamable_http": {
+      "comment": "For Claude Code, OpenWebUI, Windsurf HTTP, and other HTTP-capable clients. Start the server first with: uv run pypi-mcp --http --host 0.0.0.0 --port 8080",
+      "claude_code": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "url": "http://localhost:8080/mcp",
+            "transport": "streamable-http"
+          }
+        }
+      },
+      "windsurf_http": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "url": "http://localhost:8080/mcp",
+            "type": "http",
+            "transport": "streamable-http"
+          }
+        }
+      },
+      "openwebui": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "url": "http://localhost:8080/mcp",
+            "transport": "streamable-http",
+            "timeout": 30000
+          }
+        }
+      },
+      "generic_http": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "url": "http://localhost:8080/mcp",
+            "transport": "streamable-http",
+            "headers": {
+              "Content-Type": "application/json"
+            }
+          }
+        }
+      }
+    },
+    "docker": {
+      "comment": "Run via Docker Compose. First: docker compose up -d",
+      "claude_desktop": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "url": "http://localhost:8080/mcp",
+            "transport": "streamable-http"
+          }
+        }
+      },
+      "claude_code": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "url": "http://localhost:8080/mcp",
+            "transport": "streamable-http"
+          }
+        }
+      }
+    },
+    "pip_installed": {
+      "comment": "If installed globally via pip: pip install pypi-mcp",
+      "claude_desktop": {
+        "mcpServers": {
+          "pypi-mcp": {
+            "command": "pypi-mcp",
+            "args": [
+              "--stdio"
+            ],
+            "env": {
+              "PYTHONUNBUFFERED": "1"
+            }
+          }
+        }
+      }
+    }
+  },
+  "quickstart": {
+    "stdio_quick": {
+      "name": "pypi-mcp",
+      "command": "uvx",
+      "args": ["pypi-mcp", "--stdio"]
+    },
+    "http_quick": {
+      "name": "pypi-mcp",
+      "url": "http://localhost:8080/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
