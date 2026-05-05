@@ -202,37 +202,34 @@ class PyPIClient:
             return cached
 
         client = await self._get_client()
-        url = f"https://pypi.org/search/?q={quote(query)}"
-        # PyPI search API is limited; we use the JSON API for related packages
-        # Fallback: try to find packages via simple index
+        # Use PyPI's simple index which lists all packages
         simple_url = "https://pypi.org/simple/"
         try:
             response = await client.get(simple_url, headers={"Accept": "text/html"})
             if response.status_code == 200:
-                # Parse simple index for matching packages
                 html = response.text
                 matches = []
                 query_lower = query.lower()
-                for line in html.split("\n"):
-                    if '<a href="' in line and query_lower in line.lower():
-                        # Extract package name from href
-                        start = line.find('href="') + 6
-                        end = line.find('"', start)
-                        pkg_path = line[start:end]
-                        pkg_name = pkg_path.rstrip("/").split("/")[-1]
-                        if pkg_name and query_lower in pkg_name.lower():
-                            matches.append({
-                                "name": pkg_name,
-                                "url": f"https://pypi.org/project/{pkg_name}/",
-                            })
+                # Parse simple index HTML for matching package names
+                # PyPI simple index uses standard HTML: <a href="/simple/package-name/">package-name</a>
+                import re
+                # Pattern for HTML links
+                pattern = r'<a href="/simple/([^/]+)/">([^<]+)</a>'
+                for match in re.finditer(pattern, html):
+                    pkg_name = match.group(2)
+                    if pkg_name and query_lower in pkg_name.lower():
+                        matches.append({
+                            "name": pkg_name,
+                            "url": f"https://pypi.org/project/{pkg_name}/",
+                        })
                         if len(matches) >= limit:
                             break
                 self.cache.set(cache_key, matches, ttl=60.0)
                 return matches
         except Exception as e:
-            logger.warning("Simple index search failed: %s", e)
+            logger.warning("PyPI simple index search failed: %s", e)
 
-        # Ultimate fallback: return empty list
+        # Fallback: return empty list
         return []
 
     def clear_cache(self) -> None:

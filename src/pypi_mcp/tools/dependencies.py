@@ -1,7 +1,7 @@
 """Dependency analysis tools for PyPI packages."""
 
 import logging
-from typing import Any
+from typing import Any, Union
 
 from mcp.server.fastmcp import FastMCP
 
@@ -179,7 +179,7 @@ async def get_dependency_tree(
 
 async def resolve_dependencies(
     package_name: str,
-    python_version: str | None = None,
+    python_version: Any = None,
     include_extras: list[str] | None = None,
     max_depth: int = 5,
 ) -> dict[str, Any]:
@@ -194,6 +194,9 @@ async def resolve_dependencies(
     Returns:
         Dictionary with resolved dependency tree.
     """
+    # Convert python_version to string if it's a number
+    if python_version is not None and not isinstance(python_version, str):
+        python_version = str(python_version)
     return await get_dependency_tree(package_name, max_depth=max_depth, python_version=python_version)
 
 

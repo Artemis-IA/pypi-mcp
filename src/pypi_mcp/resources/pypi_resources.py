@@ -95,28 +95,28 @@ async def _get_package_security(package_name: str) -> dict[str, Any]:
 def register(mcp: FastMCP) -> None:
     """Register PyPI resources."""
 
-    @mcp.resource("pypi://package/{package_name}")
+    @mcp.resource(uri="pypi://package/{package_name}")
     async def package_metadata(package_name: str) -> str:
         """Package metadata from PyPI."""
         data = await _get_package_metadata(package_name)
         import json
         return json.dumps(data, indent=2)
 
-    @mcp.resource("pypi://package/{package_name}/versions")
+    @mcp.resource(uri="pypi://package/{package_name}/versions")
     async def package_versions(package_name: str) -> str:
         """Package version list from PyPI."""
         data = await _get_package_versions(package_name)
         import json
         return json.dumps(data, indent=2)
 
-    @mcp.resource("pypi://package/{package_name}/dependencies")
+    @mcp.resource(uri="pypi://package/{package_name}/dependencies")
     async def package_dependencies(package_name: str) -> str:
         """Package dependencies from PyPI."""
         data = await _get_package_dependencies(package_name)
         import json
         return json.dumps(data, indent=2)
 
-    @mcp.resource("pypi://package/{package_name}/security")
+    @mcp.resource(uri="pypi://package/{package_name}/security")
     async def package_security(package_name: str) -> str:
         """Package security report from OSV."""
         data = await _get_package_security(package_name)
