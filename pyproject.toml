@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pypi-mcp"
-version = "0.1.0"
-description = "A comprehensive MCP server for PyPI package intelligence — discovery, dependencies, security, and more."
+name = "depcheck-mcp"
+version = "0.2.0"
+description = "A comprehensive MCP server for multi-ecosystem dependency intelligence — discovery, security, and management across PyPI, npm, Maven, and more."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
@@ -25,7 +25,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.6.0",
+    "mcp>=1.27.0,<2.0",
     "httpx>=0.27.0",
     "pydantic>=2.10.0",
     "packaging>=24.0",
@@ -46,7 +46,7 @@ dev = [
 ]
 
 [project.scripts]
-pypi-mcp = "pypi_mcp.__main__:main"
+depcheck-mcp = "pypi_mcp.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pypi_mcp"]

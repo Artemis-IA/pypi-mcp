@@ -1,4 +1,4 @@
-"""Python compatibility checking tools."""
+"""Compatibility checking tools for depcheck-mcp."""
 
 import logging
 from typing import Any
@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from packaging.specifiers import SpecifierSet
 
 from pypi_mcp.core import (
+    AbstractRegistryClient,
     InvalidPackageNameError,
     NetworkError,
     PackageNotFoundError,
@@ -14,21 +15,29 @@ from pypi_mcp.core import (
     PyPIError,
 )
 
+
+def _get_registry_client(ecosystem: str) -> AbstractRegistryClient:
+    """Get the appropriate registry client for an ecosystem."""
+    if ecosystem == "pypi":
+        return PyPIClient()
+    raise ValueError(f"Unsupported ecosystem: {ecosystem}")
+
 logger = logging.getLogger(__name__)
 
 
-async def check_python_compatibility(package_name: str, python_version: str) -> dict[str, Any]:
+async def check_python_compatibility(package_name: str, python_version: str, ecosystem: str = "pypi") -> dict[str, Any]:
     """Check if a package is compatible with a specific Python version.
 
     Args:
         package_name: Name of the package.
         python_version: Target Python version (e.g., '3.10', '3.11.4').
+        ecosystem: Package ecosystem (default: 'pypi').
 
     Returns:
         Dictionary with compatibility results.
     """
     try:
-        client = PyPIClient()
+        client = _get_registry_client(ecosystem)
         raw = await client.get_package_info(package_name)
         await client.close()
 
@@ -50,6 +59,7 @@ async def check_python_compatibility(package_name: str, python_version: str) -> 
             compatible = specifier.contains(python_version)
             return {
                 "package_name": package_name,
+                "ecosystem": ecosystem,
                 "python_version": python_version,
                 "compatible": compatible,
                 "source": "requires_python",
@@ -59,6 +69,7 @@ async def check_python_compatibility(package_name: str, python_version: str) -> 
         except Exception:
             return {
                 "package_name": package_name,
+                "ecosystem": ecosystem,
                 "python_version": python_version,
                 "compatible": True,
                 "source": "parse_error",
@@ -67,23 +78,26 @@ async def check_python_compatibility(package_name: str, python_version: str) -> 
             }
 
     except PyPIError as e:
-        return {"error": str(e), "error_type": type(e).__name__, "package_name": package_name}
+        return {"error": str(e), "error_type": type(e).__name__, "ecosystem": ecosystem, "package_name": package_name}
     except Exception as e:
         return {
             "error": f"Unexpected error: {e}",
             "error_type": "UnexpectedError",
+            "ecosystem": ecosystem,
             "package_name": package_name,
         }
 
 
 async def get_compatible_python_versions(
     package_name: str,
+    ecosystem: str = "pypi",
     python_versions: list[str] | None = None,
 ) -> dict[str, Any]:
     """Check compatibility against multiple Python versions.
 
     Args:
         package_name: Name of the package.
+        ecosystem: Package ecosystem (default: 'pypi').
         python_versions: List of versions to check (defaults to common versions).
 
     Returns:
@@ -93,7 +107,7 @@ async def get_compatible_python_versions(
     results = []
 
     for pv in versions:
-        result = await check_python_compatibility(package_name, pv)
+        result = await check_python_compatibility(package_name, pv, ecosystem=ecosystem)
         results.append({
             "python_version": pv,
             "compatible": result.get("compatible", False),
@@ -105,6 +119,7 @@ async def get_compatible_python_versions(
 
     return {
         "package_name": package_name,
+        "ecosystem": ecosystem,
         "compatible_versions": compatible_versions,
         "incompatible_versions": incompatible_versions,
         "compatibility_rate": len(compatible_versions) / len(versions) if versions else 0,

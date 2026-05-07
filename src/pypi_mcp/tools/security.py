@@ -1,4 +1,4 @@
-"""Security audit tools using OSV database."""
+"""Security audit tools for depcheck-mcp."""
 
 import logging
 from typing import Any
@@ -6,6 +6,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from pypi_mcp.core import (
+    AbstractRegistryClient,
     InvalidPackageNameError,
     NetworkError,
     OSVClient,
@@ -16,17 +17,25 @@ from pypi_mcp.core import (
 )
 from pypi_mcp.core.models import SecurityReport, Vulnerability
 
+
+def _get_registry_client(ecosystem: str) -> AbstractRegistryClient:
+    """Get the appropriate registry client for an ecosystem."""
+    if ecosystem == "pypi":
+        return PyPIClient()
+    raise ValueError(f"Unsupported ecosystem: {ecosystem}")
+
 logger = logging.getLogger(__name__)
 
 
 async def check_vulnerabilities(
-    package_name: str, version: str | None = None
+    package_name: str, version: str | None = None, ecosystem: str = "pypi"
 ) -> dict[str, Any]:
     """Check for known vulnerabilities in a package using OSV.
 
     Args:
         package_name: Name of the package.
         version: Specific version to check (optional, defaults to latest).
+        ecosystem: Package ecosystem (default: 'pypi').
 
     Returns:
         Dictionary with vulnerability report.
@@ -34,13 +43,13 @@ async def check_vulnerabilities(
     try:
         # If no version provided, fetch latest
         if not version:
-            pypi = PyPIClient()
-            raw = await pypi.get_package_info(package_name)
-            await pypi.close()
+            client = _get_registry_client(ecosystem)
+            raw = await client.get_package_info(package_name)
+            await client.close()
             version = raw.get("info", {}).get("version", "")
 
         osv = OSVClient()
-        vulns = await osv.query_vulnerabilities(package_name, version)
+        vulns = await osv.query_vulnerabilities(package_name, version, ecosystem=ecosystem.capitalize())
         await osv.close()
 
         vulnerabilities = []
@@ -97,6 +106,7 @@ async def check_vulnerabilities(
             vulnerabilities.append(vuln.model_dump())
 
         report = SecurityReport(
+            ecosystem=ecosystem,
             package_name=package_name,
             scanned_packages=1,
             vulnerabilities_found=len(vulnerabilities),
@@ -110,19 +120,21 @@ async def check_vulnerabilities(
         return {"security_report": report.model_dump()}
 
     except PyPIError as e:
-        return {"error": str(e), "error_type": type(e).__name__, "package_name": package_name}
+        return {"error": str(e), "error_type": type(e).__name__, "ecosystem": ecosystem, "package_name": package_name}
     except OSVError as e:
-        return {"error": str(e), "error_type": "OSVError", "package_name": package_name}
+        return {"error": str(e), "error_type": "OSVError", "ecosystem": ecosystem, "package_name": package_name}
     except Exception as e:
         return {
             "error": f"Unexpected error: {e}",
             "error_type": "UnexpectedError",
+            "ecosystem": ecosystem,
             "package_name": package_name,
         }
 
 
 async def scan_dependency_vulnerabilities(
     package_name: str,
+    ecosystem: str = "pypi",
     max_depth: int = 3,
     include_extras: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -130,6 +142,7 @@ async def scan_dependency_vulnerabilities(
 
     Args:
         package_name: Name of the root package.
+        ecosystem: Package ecosystem (default: 'pypi').
         max_depth: Maximum recursion depth (default: 3).
         include_extras: Extra dependency groups to include.
 
@@ -137,7 +150,7 @@ async def scan_dependency_vulnerabilities(
         Dictionary with full security report.
     """
     try:
-        pypi = PyPIClient()
+        client = _get_registry_client(ecosystem)
         osv = OSVClient()
         visited: set[str] = set()
         all_vulns: list[dict[str, Any]] = []
@@ -151,7 +164,7 @@ async def scan_dependency_vulnerabilities(
             visited.add(name.lower())
 
             try:
-                raw = await pypi.get_package_info(name)
+                raw = await client.get_package_info(name)
             except PackageNotFoundError:
                 return
 
@@ -160,7 +173,7 @@ async def scan_dependency_vulnerabilities(
             scanned += 1
 
             try:
-                vulns = await osv.query_vulnerabilities(name, version)
+                vulns = await osv.query_vulnerabilities(name, version, ecosystem=ecosystem.capitalize())
                 for v in vulns:
                     severity = "UNKNOWN"
                     if "severity" in v and v["severity"]:
@@ -199,10 +212,11 @@ async def scan_dependency_vulnerabilities(
                     await _scan(dep_name, depth + 1)
 
         await _scan(package_name, 0)
-        await pypi.close()
+        await client.close()
         await osv.close()
 
         report = SecurityReport(
+            ecosystem=ecosystem,
             package_name=package_name,
             scanned_packages=scanned,
             vulnerabilities_found=len(all_vulns),
@@ -219,6 +233,7 @@ async def scan_dependency_vulnerabilities(
         return {
             "error": f"Unexpected error: {e}",
             "error_type": "UnexpectedError",
+            "ecosystem": ecosystem,
             "package_name": package_name,
         }
 

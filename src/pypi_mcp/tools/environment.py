@@ -1,4 +1,4 @@
-"""Environment analysis tools for Python projects."""
+"""Environment analysis tools for depcheck-mcp projects."""
 
 import logging
 import subprocess
@@ -6,7 +6,14 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from pypi_mcp.core import OSVClient, PackageNotFoundError, PyPIClient, PyPIError
+from pypi_mcp.core import AbstractRegistryClient, OSVClient, PackageNotFoundError, PyPIClient, PyPIError
+
+
+def _get_registry_client(ecosystem: str) -> AbstractRegistryClient:
+    """Get the appropriate registry client for an ecosystem."""
+    if ecosystem == "pypi":
+        return PyPIClient()
+    raise ValueError(f"Unsupported ecosystem: {ecosystem}")
 
 logger = logging.getLogger(__name__)
 
@@ -14,19 +21,21 @@ logger = logging.getLogger(__name__)
 async def analyze_environment_dependencies(
     requirements: list[str] | None = None,
     pyproject_dependencies: dict[str, str] | None = None,
+    ecosystem: str = "pypi",
 ) -> dict[str, Any]:
-    """Analyze the dependencies of a Python project.
+    """Analyze the dependencies of a project.
 
     Args:
         requirements: List of requirements.
         pyproject_dependencies: Dict of pyproject.toml dependencies.
+        ecosystem: Package ecosystem (default: 'pypi').
 
     Returns:
         Dictionary with analysis results.
     """
     all_packages: list[dict[str, Any]] = []
 
-    pypi = PyPIClient()
+    client = _get_registry_client(ecosystem)
     osv = OSVClient()
 
     deps_to_check = []
@@ -51,8 +60,8 @@ async def analyze_environment_dependencies(
 
     for name, version in deps_to_check:
         try:
-            latest = await pypi.get_latest_version(name)
-            vulns = await osv.query_vulnerabilities(name, version or latest)
+            latest = await client.get_latest_version(name)
+            vulns = await osv.query_vulnerabilities(name, version or latest, ecosystem=ecosystem.capitalize())
 
             all_packages.append({
                 "name": name,
@@ -66,7 +75,7 @@ async def analyze_environment_dependencies(
         except Exception as e:
             all_packages.append({"name": name, "error": str(e)})
 
-    await pypi.close()
+    await client.close()
     await osv.close()
 
     outdated = [p for p in all_packages if p.get("up_to_date") is False]
@@ -85,12 +94,14 @@ async def analyze_environment_dependencies(
 async def check_outdated_packages(
     requirements: list[str] | None = None,
     pyproject_dependencies: dict[str, str] | None = None,
+    ecosystem: str = "pypi",
 ) -> dict[str, Any]:
     """Check which packages in a project are outdated.
 
     Args:
         requirements: List of requirements.
         pyproject_dependencies: Dict of pyproject.toml dependencies.
+        ecosystem: Package ecosystem (default: 'pypi').
 
     Returns:
         Dictionary with outdated packages.
@@ -98,6 +109,7 @@ async def check_outdated_packages(
     result = await analyze_environment_dependencies(
         requirements=requirements,
         pyproject_dependencies=pyproject_dependencies,
+        ecosystem=ecosystem,
     )
     return {
         "outdated_count": result["outdated_count"],
@@ -110,6 +122,7 @@ async def check_outdated_packages(
 async def generate_update_plan(
     requirements: list[str] | None = None,
     pyproject_dependencies: dict[str, str] | None = None,
+    ecosystem: str = "pypi",
     strategy: str = "balanced",
 ) -> dict[str, Any]:
     """Generate an update plan for project dependencies.
@@ -117,6 +130,7 @@ async def generate_update_plan(
     Args:
         requirements: List of requirements.
         pyproject_dependencies: Dict of pyproject.toml dependencies.
+        ecosystem: Package ecosystem (default: 'pypi').
         strategy: Update strategy ('conservative', 'balanced', 'aggressive').
 
     Returns:
@@ -125,6 +139,7 @@ async def generate_update_plan(
     result = await analyze_environment_dependencies(
         requirements=requirements,
         pyproject_dependencies=pyproject_dependencies,
+        ecosystem=ecosystem,
     )
 
     outdated = result.get("outdated", [])

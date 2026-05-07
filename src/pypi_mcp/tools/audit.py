@@ -1,4 +1,4 @@
-"""Project audit tools for requirements.txt, pyproject.toml, setup.py."""
+"""Project audit tools for depcheck-mcp (Python-specific for now)."""
 
 import logging
 from typing import Any
@@ -6,11 +6,19 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from pypi_mcp.core import (
+    AbstractRegistryClient,
     OSVClient,
     PackageNotFoundError,
     PyPIClient,
     PyPIError,
 )
+
+
+def _get_registry_client(ecosystem: str) -> AbstractRegistryClient:
+    """Get the appropriate registry client for an ecosystem."""
+    if ecosystem == "pypi":
+        return PyPIClient()
+    raise ValueError(f"Unsupported ecosystem: {ecosystem}")
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +71,12 @@ def _parse_requirement_line(line: str) -> tuple[str, str] | None:
     return (name, version)
 
 
-async def check_requirements_txt(requirements: list[str]) -> dict[str, Any]:
+async def check_requirements_txt(requirements: list[str], ecosystem: str = "pypi") -> dict[str, Any]:
     """Audit a requirements.txt content for outdated packages and vulnerabilities.
 
     Args:
         requirements: List of requirement lines.
+        ecosystem: Package ecosystem (default: 'pypi').
 
     Returns:
         Dictionary with audit results.
@@ -75,7 +84,7 @@ async def check_requirements_txt(requirements: list[str]) -> dict[str, Any]:
     packages: list[dict[str, Any]] = []
     outdated: list[dict[str, Any]] = []
 
-    pypi = PyPIClient()
+    client = _get_registry_client(ecosystem)
     osv = OSVClient()
 
     for line in requirements:
@@ -85,8 +94,8 @@ async def check_requirements_txt(requirements: list[str]) -> dict[str, Any]:
 
         name, version = parsed
         try:
-            latest = await pypi.get_latest_version(name)
-            vulns = await osv.query_vulnerabilities(name, version or latest)
+            latest = await client.get_latest_version(name)
+            vulns = await osv.query_vulnerabilities(name, version or latest, ecosystem=ecosystem.capitalize())
 
             pkg_info = {
                 "name": name,
@@ -104,7 +113,7 @@ async def check_requirements_txt(requirements: list[str]) -> dict[str, Any]:
         except Exception as e:
             packages.append({"name": name, "error": str(e)})
 
-    await pypi.close()
+    await client.close()
     await osv.close()
 
     return {
@@ -119,6 +128,7 @@ async def check_pyproject_toml(
     dependencies: dict[str, str],
     optional_dependencies: dict[str, dict[str, str]] | None = None,
     dev_dependencies: dict[str, str] | None = None,
+    ecosystem: str = "pypi",
 ) -> dict[str, Any]:
     """Audit pyproject.toml dependencies.
 
@@ -126,6 +136,7 @@ async def check_pyproject_toml(
         dependencies: Main dependencies dict {name: version_spec}.
         optional_dependencies: Optional dependency groups.
         dev_dependencies: Dev dependencies dict.
+        ecosystem: Package ecosystem (default: 'pypi').
 
     Returns:
         Dictionary with audit results.
@@ -142,7 +153,7 @@ async def check_pyproject_toml(
     packages: list[dict[str, Any]] = []
     outdated: list[dict[str, Any]] = []
 
-    pypi = PyPIClient()
+    client = _get_registry_client(ecosystem)
     osv = OSVClient()
 
     for raw_name, spec in all_deps.items():
@@ -150,8 +161,8 @@ async def check_pyproject_toml(
         version = spec.strip("^>=~< !").split(",")[0].strip()
 
         try:
-            latest = await pypi.get_latest_version(name)
-            vulns = await osv.query_vulnerabilities(name, version or latest)
+            latest = await client.get_latest_version(name)
+            vulns = await osv.query_vulnerabilities(name, version or latest, ecosystem=ecosystem.capitalize())
 
             pkg_info = {
                 "name": name,
@@ -169,7 +180,7 @@ async def check_pyproject_toml(
         except Exception as e:
             packages.append({"name": name, "error": str(e)})
 
-    await pypi.close()
+    await client.close()
     await osv.close()
 
     return {
@@ -180,16 +191,17 @@ async def check_pyproject_toml(
     }
 
 
-async def check_setup_py(dependencies: list[str]) -> dict[str, Any]:
+async def check_setup_py(dependencies: list[str], ecosystem: str = "pypi") -> dict[str, Any]:
     """Audit setup.py install_requires dependencies.
 
     Args:
         dependencies: List of dependency strings.
+        ecosystem: Package ecosystem (default: 'pypi').
 
     Returns:
         Dictionary with audit results.
     """
-    return await check_requirements_txt(dependencies)
+    return await check_requirements_txt(dependencies, ecosystem=ecosystem)
 
 
 def register(mcp: FastMCP) -> None:

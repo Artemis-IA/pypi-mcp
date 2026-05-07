@@ -1,4 +1,4 @@
-"""Version management tools for PyPI packages."""
+"""Version management tools for depcheck-mcp packages."""
 
 import logging
 from typing import Any
@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from packaging.version import Version as PackagingVersion, parse as parse_version
 
 from pypi_mcp.core import (
+    AbstractRegistryClient,
     InvalidPackageNameError,
     NetworkError,
     PackageNotFoundError,
@@ -15,44 +16,54 @@ from pypi_mcp.core import (
 )
 from pypi_mcp.core.models import VersionInfo
 
+
+def _get_registry_client(ecosystem: str) -> AbstractRegistryClient:
+    """Get the appropriate registry client for an ecosystem."""
+    if ecosystem == "pypi":
+        return PyPIClient()
+    raise ValueError(f"Unsupported ecosystem: {ecosystem}")
+
 logger = logging.getLogger(__name__)
 
 
-async def get_latest_version(package_name: str) -> dict[str, Any]:
-    """Get the latest version of a PyPI package.
+async def get_latest_version(package_name: str, ecosystem: str = "pypi") -> dict[str, Any]:
+    """Get the latest version of a package.
 
     Args:
         package_name: Name of the package.
+        ecosystem: Package ecosystem (default: 'pypi').
 
     Returns:
         Dictionary with latest version.
     """
     try:
-        client = PyPIClient()
+        client = _get_registry_client(ecosystem)
         version = await client.get_latest_version(package_name)
         await client.close()
-        return {"package_name": package_name, "latest_version": version}
+        return {"package_name": package_name, "ecosystem": ecosystem, "latest_version": version}
     except PyPIError as e:
-        return {"error": str(e), "error_type": type(e).__name__, "package_name": package_name}
+        return {"error": str(e), "error_type": type(e).__name__, "ecosystem": ecosystem, "package_name": package_name}
     except Exception as e:
         return {
             "error": f"Unexpected error: {e}",
             "error_type": "UnexpectedError",
+            "ecosystem": ecosystem,
             "package_name": package_name,
         }
 
 
-async def get_package_releases(package_name: str) -> dict[str, Any]:
+async def get_package_releases(package_name: str, ecosystem: str = "pypi") -> dict[str, Any]:
     """Get all release versions of a package with details.
 
     Args:
         package_name: Name of the package.
+        ecosystem: Package ecosystem (default: 'pypi').
 
     Returns:
         Dictionary with release information.
     """
     try:
-        client = PyPIClient()
+        client = _get_registry_client(ecosystem)
         raw = await client.get_package_info(package_name)
         await client.close()
 
@@ -77,6 +88,7 @@ async def get_package_releases(package_name: str) -> dict[str, Any]:
             }
 
         vi = VersionInfo(
+            ecosystem=ecosystem,
             package_name=info.get("name", package_name),
             latest_version=info.get("version", ""),
             total_versions=len(sorted_versions),
@@ -87,20 +99,22 @@ async def get_package_releases(package_name: str) -> dict[str, Any]:
         return {"releases": vi.model_dump()}
 
     except PyPIError as e:
-        return {"error": str(e), "error_type": type(e).__name__, "package_name": package_name}
+        return {"error": str(e), "error_type": type(e).__name__, "ecosystem": ecosystem, "package_name": package_name}
     except Exception as e:
         return {
             "error": f"Unexpected error: {e}",
             "error_type": "UnexpectedError",
+            "ecosystem": ecosystem,
             "package_name": package_name,
         }
 
 
-async def list_package_versions(package_name: str, limit: int = 50) -> dict[str, Any]:
+async def list_package_versions(package_name: str, ecosystem: str = "pypi", limit: int = 50) -> dict[str, Any]:
     """List all available versions for a package.
 
     Args:
         package_name: Name of the package.
+        ecosystem: Package ecosystem (default: 'pypi').
         limit: Maximum versions to return (default: 50, max: 100).
 
     Returns:
@@ -108,7 +122,7 @@ async def list_package_versions(package_name: str, limit: int = 50) -> dict[str,
     """
     try:
         actual_limit = min(limit, 100)
-        client = PyPIClient()
+        client = _get_registry_client(ecosystem)
         versions = await client.get_package_versions(package_name)
         await client.close()
 
@@ -116,16 +130,18 @@ async def list_package_versions(package_name: str, limit: int = 50) -> dict[str,
 
         return {
             "package_name": package_name,
+            "ecosystem": ecosystem,
             "total_versions": len(sorted_versions),
             "versions": sorted_versions[:actual_limit],
         }
 
     except PyPIError as e:
-        return {"error": str(e), "error_type": type(e).__name__, "package_name": package_name}
+        return {"error": str(e), "error_type": type(e).__name__, "ecosystem": ecosystem, "package_name": package_name}
     except Exception as e:
         return {
             "error": f"Unexpected error: {e}",
             "error_type": "UnexpectedError",
+            "ecosystem": ecosystem,
             "package_name": package_name,
         }
 

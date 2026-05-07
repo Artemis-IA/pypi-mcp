@@ -1,4 +1,4 @@
-"""Package download tools."""
+"""Package download tools for depcheck-mcp."""
 
 import logging
 import os
@@ -9,6 +9,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 from pypi_mcp.core import (
+    AbstractRegistryClient,
     InvalidPackageNameError,
     NetworkError,
     PackageNotFoundError,
@@ -16,19 +17,28 @@ from pypi_mcp.core import (
     PyPIError,
 )
 
+
+def _get_registry_client(ecosystem: str) -> AbstractRegistryClient:
+    """Get the appropriate registry client for an ecosystem."""
+    if ecosystem == "pypi":
+        return PyPIClient()
+    raise ValueError(f"Unsupported ecosystem: {ecosystem}")
+
 logger = logging.getLogger(__name__)
 
 
 async def download_package(
     package_name: str,
+    ecosystem: str = "pypi",
     download_dir: str = "./downloads",
     version: str | None = None,
     prefer_wheel: bool = True,
 ) -> dict[str, Any]:
-    """Download a PyPI package to a local directory.
+    """Download a package to a local directory.
 
     Args:
         package_name: Name of the package.
+        ecosystem: Package ecosystem (default: 'pypi').
         download_dir: Directory to save files (default: ./downloads).
         version: Specific version (optional, defaults to latest).
         prefer_wheel: Prefer wheel over sdist (default: True).
@@ -37,7 +47,7 @@ async def download_package(
         Dictionary with download results.
     """
     try:
-        client = PyPIClient()
+        client = _get_registry_client(ecosystem)
         raw = await client.get_package_info(package_name)
         await client.close()
 
@@ -105,6 +115,7 @@ async def download_package(
         return {
             "error": f"Download failed: {e}",
             "error_type": "UnexpectedError",
+            "ecosystem": ecosystem,
             "package_name": package_name,
         }
 

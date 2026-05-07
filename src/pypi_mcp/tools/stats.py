@@ -1,4 +1,4 @@
-"""Download statistics tools for PyPI packages."""
+"""Download statistics tools for depcheck-mcp packages."""
 
 import logging
 from typing import Any
@@ -23,8 +23,8 @@ _POPULAR_PACKAGES = [
 ]
 
 
-async def get_download_statistics(package_name: str, period: str = "month") -> dict[str, Any]:
-    """Get download statistics for a PyPI package.
+async def get_download_statistics(package_name: str, ecosystem: str = "pypi", period: str = "month") -> dict[str, Any]:
+    """Get download statistics for a package.
 
     Uses pypistats.org API for aggregated stats.
 
@@ -45,6 +45,7 @@ async def get_download_statistics(package_name: str, period: str = "month") -> d
                 data = response.json()
                 return {
                     "package_name": package_name,
+                    "ecosystem": ecosystem,
                     "period": period,
                     "recent_downloads": {
                         "last_day": data.get("data", {}).get("last_day", 0),
@@ -59,6 +60,7 @@ async def get_download_statistics(package_name: str, period: str = "month") -> d
     # Fallback: return empty stats
     return {
         "package_name": package_name,
+        "ecosystem": ecosystem,
         "period": period,
         "recent_downloads": {"last_day": 0, "last_week": 0, "last_month": 0},
         "source": "unavailable",
@@ -67,7 +69,7 @@ async def get_download_statistics(package_name: str, period: str = "month") -> d
 
 
 async def get_download_trends(
-    package_name: str, days: int = 180
+    package_name: str, ecosystem: str = "pypi", days: int = 180
 ) -> dict[str, Any]:
     """Get download trends over time for a package.
 
@@ -95,6 +97,7 @@ async def get_download_trends(
 
                 return {
                     "package_name": package_name,
+                    "ecosystem": ecosystem,
                     "days": len(recent),
                     "total_downloads": total,
                     "average_daily": round(avg_daily, 2),
@@ -109,6 +112,7 @@ async def get_download_trends(
 
     return {
         "package_name": package_name,
+        "ecosystem": ecosystem,
         "days": days,
         "total_downloads": 0,
         "average_daily": 0,
@@ -119,9 +123,9 @@ async def get_download_trends(
 
 
 async def get_top_downloaded_packages(
-    period: str = "month", limit: int = 20
+    ecosystem: str = "pypi", period: str = "month", limit: int = 20
 ) -> dict[str, Any]:
-    """Get the most downloaded PyPI packages.
+    """Get the most downloaded packages.
 
     Args:
         period: Time period ('day', 'week', 'month').
@@ -154,6 +158,7 @@ async def get_top_downloaded_packages(
     results.sort(key=lambda x: x["downloads"], reverse=True)
 
     return {
+        "ecosystem": ecosystem,
         "period": period,
         "limit": actual_limit,
         "packages": results[:actual_limit],

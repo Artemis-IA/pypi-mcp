@@ -16,12 +16,15 @@ from .exceptions import (
     PyPIServerError,
     RateLimitError,
 )
+from .registry import AbstractRegistryClient
 
 logger = logging.getLogger(__name__)
 
 
-class PyPIClient:
+class PyPIClient(AbstractRegistryClient):
     """Async client for PyPI JSON API."""
+
+    ecosystem: str = "pypi"
 
     def __init__(
         self,
@@ -231,6 +234,14 @@ class PyPIClient:
 
         # Fallback: return empty list
         return []
+
+    async def get_versions(self, package_name: str) -> list[str]:
+        """Fetch all available versions (alias for get_package_versions)."""
+        return await self.get_package_versions(package_name)
+
+    async def get_download_stats(self, package_name: str, period: str = "month") -> dict[str, Any]:
+        """Fetch download statistics for a package (PyPI doesn't expose this publicly)."""
+        return {"package_name": package_name, "period": period, "downloads": None, "note": "PyPI does not expose public download stats via API"}
 
     def clear_cache(self) -> None:
         """Clear the internal cache."""

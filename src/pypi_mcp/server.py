@@ -1,4 +1,4 @@
-"""pypi-mcp server — comprehensive MCP server for PyPI package intelligence."""
+"""depcheck-mcp server — comprehensive MCP server for multi-ecosystem dependency intelligence."""
 
 import argparse
 import logging
@@ -10,26 +10,26 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-logger = logging.getLogger("pypi_mcp")
+logger = logging.getLogger("depcheck_mcp")
 
 
 @asynccontextmanager
 async def _server_lifespan(_server: FastMCP) -> AsyncIterator[None]:
     """Lightweight lifespan for startup/shutdown."""
-    logger.info("pypi-mcp server starting...")
+    logger.info("depcheck-mcp server starting...")
     yield
-    logger.info("pypi-mcp server shutting down...")
+    logger.info("depcheck-mcp server shutting down...")
 
 
 _mcp_instructions = """\
-You are a PyPI package intelligence assistant. Use the available tools to help users discover,
-analyze, and manage Python packages.
+You are a multi-ecosystem dependency intelligence assistant. Use the available tools to help users discover,
+analyze, and manage dependencies across PyPI, npm, Maven, and more.
 
 ## Available Tool Categories
 
 ### Discovery
-- `search_packages` — Search PyPI by keyword
-- `get_package_info` — Get comprehensive package metadata
+- `search_packages` — Search packages by keyword (supports ecosystem)
+- `get_package_info` — Get comprehensive package metadata (supports ecosystem)
 - `check_package_exists` — Verify package existence
 
 ### Versions
@@ -49,9 +49,9 @@ analyze, and manage Python packages.
 - `security_audit_project` — Audit a set of dependencies
 
 ### Project Audit
-- `check_requirements_txt` — Audit requirements.txt
-- `check_pyproject_toml` — Audit pyproject.toml dependencies
-- `check_setup_py` — Audit setup.py dependencies
+- `check_requirements_txt` — Audit requirements.txt (PyPI)
+- `check_pyproject_toml` — Audit pyproject.toml dependencies (PyPI)
+- `check_setup_py` — Audit setup.py dependencies (PyPI)
 
 ### Statistics
 - `get_download_statistics` — Download counts
@@ -71,13 +71,14 @@ analyze, and manage Python packages.
 - `download_package` — Download package to local directory
 
 ## Resources
-- `pypi://package/{name}` — Package metadata
-- `pypi://package/{name}/versions` — Version list
-- `pypi://package/{name}/dependencies` — Dependencies
-- `pypi://package/{name}/security` — Security report
+- `depcheck://package/{ecosystem}/{name}` — Package metadata
+- `depcheck://package/{ecosystem}/{name}/versions` — Version list
+- `depcheck://package/{ecosystem}/{name}/dependencies` — Dependencies
+- `depcheck://package/{ecosystem}/{name}/security` — Security report
 
 ## Workflow Guidelines
-- Always prefer tools over web search for PyPI data
+- Always prefer tools over web search for registry data
+- Specify ecosystem when calling tools (default: pypi)
 - For security questions, use OSV-based security tools first
 - For dependency analysis, use tree/resolution tools
 - For project audits, use audit tools with the actual dependency files
@@ -85,7 +86,7 @@ analyze, and manage Python packages.
 """
 
 mcp = FastMCP(
-    name="pypi-mcp",
+    name="depcheck-mcp",
     debug=False,
     instructions=_mcp_instructions,
     stateless_http=True,
@@ -93,9 +94,23 @@ mcp = FastMCP(
     lifespan=_server_lifespan,
 )
 
+# Register depcheck extension (SEP-2133)
+from pypi_mcp.core import ExtensionManager, ExtensionCapability
+
+ExtensionManager.register(
+    ExtensionCapability(
+        name="depcheck.v1",
+        version="1.0.0",
+        ecosystems=["pypi", "npm"],
+        actions=["read", "audit", "update", "rollback"],
+        security_sources=["osv", "ghsa", "npm-audit"],
+    )
+)
+
 
 # Register tool modules
 from pypi_mcp.tools import (
+    action,
     audit,
     compatibility,
     dependencies,
@@ -118,6 +133,7 @@ stats.register(mcp)
 compatibility.register(mcp)
 download.register(mcp)
 environment.register(mcp)
+action.register(mcp)
 pypi_resources.register(mcp)
 package_prompts.register(mcp)
 
@@ -125,7 +141,7 @@ package_prompts.register(mcp)
 def main() -> None:
     """CLI entry point for pypi-mcp server."""
     parser = argparse.ArgumentParser(
-        description="pypi-mcp: Comprehensive MCP server for PyPI package intelligence",
+        description="depcheck-mcp: Comprehensive MCP server for multi-ecosystem dependency intelligence",
     )
     parser.add_argument(
         "--stdio", action="store_true", help="Use stdio transport (default: HTTP)"
@@ -169,12 +185,12 @@ def main() -> None:
         }
 
         async def _health(_request):  # type: ignore[no-untyped-def]
-            return JSONResponse({"status": "ok", "server": "pypi-mcp"})
+            return JSONResponse({"status": "ok", "server": "depcheck-mcp"})
 
         app = mcp.streamable_http_app()
         app.router.routes.append(Route("/health", _health, methods=["GET"]))
 
-        logger.info("Starting pypi-mcp HTTP server on %s:%d", args.host, args.port)
+        logger.info("Starting depcheck-mcp HTTP server on %s:%d", args.host, args.port)
         uvicorn.run(app, host=args.host, port=args.port, log_config=uvicorn.config.LOGGING_CONFIG)
 
 

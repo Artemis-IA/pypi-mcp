@@ -6,13 +6,14 @@ from typing import Any
 import httpx
 
 from .exceptions import NetworkError, OSVError
+from .security import AbstractSecurityClient
 
 logger = logging.getLogger(__name__)
 
 OSV_BASE_URL = "https://api.osv.dev/v1"
 
 
-class OSVClient:
+class OSVClient(AbstractSecurityClient):
     """Async client for OSV vulnerability database."""
 
     def __init__(self, base_url: str = OSV_BASE_URL, timeout: float = 30.0) -> None:
@@ -57,12 +58,23 @@ class OSVClient:
         Returns:
             List of vulnerability entries.
         """
+        # OSV API requires ecosystem with proper casing (e.g., "PyPI", not "pypi")
+        ecosystem_map = {
+            "pypi": "PyPI",
+            "npm": "npm",
+            "maven": "Maven",
+            "go": "Go",
+            "cargo": "Cargo",
+            "nuget": "NuGet",
+        }
+        osv_ecosystem = ecosystem_map.get(ecosystem.lower(), ecosystem)
+
         client = await self._get_client()
 
         payload: dict[str, Any] = {
             "package": {
                 "name": package_name,
-                "ecosystem": ecosystem,
+                "ecosystem": osv_ecosystem,
             }
         }
         if version:

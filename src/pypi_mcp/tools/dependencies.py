@@ -1,4 +1,4 @@
-"""Dependency analysis tools for PyPI packages."""
+"""Dependency analysis tools for depcheck-mcp packages."""
 
 import logging
 from typing import Any, Union
@@ -6,6 +6,7 @@ from typing import Any, Union
 from mcp.server.fastmcp import FastMCP
 
 from pypi_mcp.core import (
+    AbstractRegistryClient,
     InvalidPackageNameError,
     NetworkError,
     PackageNotFoundError,
@@ -13,6 +14,13 @@ from pypi_mcp.core import (
     PyPIError,
 )
 from pypi_mcp.core.models import DependencyInfo
+
+
+def _get_registry_client(ecosystem: str) -> AbstractRegistryClient:
+    """Get the appropriate registry client for an ecosystem."""
+    if ecosystem == "pypi":
+        return PyPIClient()
+    raise ValueError(f"Unsupported ecosystem: {ecosystem}")
 
 logger = logging.getLogger(__name__)
 
@@ -54,18 +62,19 @@ def _parse_requires_dist(requires_dist: list[str] | None) -> dict[str, Any]:
     }
 
 
-async def get_dependencies(package_name: str, version: str | None = None) -> dict[str, Any]:
-    """Get dependency information for a PyPI package.
+async def get_dependencies(package_name: str, ecosystem: str = "pypi", version: str | None = None) -> dict[str, Any]:
+    """Get dependency information for a package.
 
     Args:
         package_name: Name of the package.
+        ecosystem: Package ecosystem (default: 'pypi').
         version: Specific version (optional, defaults to latest).
 
     Returns:
         Dictionary with dependency information.
     """
     try:
-        client = PyPIClient()
+        client = _get_registry_client(ecosystem)
         raw = await client.get_package_info(package_name)
         await client.close()
 
@@ -74,9 +83,10 @@ async def get_dependencies(package_name: str, version: str | None = None) -> dic
         parsed = _parse_requires_dist(requires_dist)
 
         dep_info = DependencyInfo(
+            ecosystem=ecosystem,
             package_name=info.get("name", package_name),
             version=info.get("version", ""),
-            requires_python=info.get("requires_python", ""),
+            requires_runtime=info.get("requires_python", ""),
             runtime_dependencies=parsed["runtime"],
             development_dependencies=parsed["development"],
             optional_dependencies=parsed["extras"],
@@ -91,17 +101,19 @@ async def get_dependencies(package_name: str, version: str | None = None) -> dic
         return {"dependencies": dep_info.model_dump()}
 
     except PyPIError as e:
-        return {"error": str(e), "error_type": type(e).__name__, "package_name": package_name}
+        return {"error": str(e), "error_type": type(e).__name__, "ecosystem": ecosystem, "package_name": package_name}
     except Exception as e:
         return {
             "error": f"Unexpected error: {e}",
             "error_type": "UnexpectedError",
+            "ecosystem": ecosystem,
             "package_name": package_name,
         }
 
 
 async def get_dependency_tree(
     package_name: str,
+    ecosystem: str = "pypi",
     max_depth: int = 3,
     python_version: str | None = None,
 ) -> dict[str, Any]:
@@ -109,6 +121,7 @@ async def get_dependency_tree(
 
     Args:
         package_name: Name of the root package.
+        ecosystem: Package ecosystem (default: 'pypi').
         max_depth: Maximum recursion depth (default: 3).
         python_version: Target Python version for filtering (optional).
 
@@ -116,7 +129,7 @@ async def get_dependency_tree(
         Dictionary with dependency tree.
     """
     try:
-        client = PyPIClient()
+        client = _get_registry_client(ecosystem)
         visited: set[str] = set()
         tree: dict[str, Any] = {}
 
@@ -163,6 +176,7 @@ async def get_dependency_tree(
 
         return {
             "package_name": package_name,
+            "ecosystem": ecosystem,
             "max_depth": max_depth,
             "python_version": python_version,
             "tree": root,
@@ -173,12 +187,14 @@ async def get_dependency_tree(
         return {
             "error": f"Unexpected error: {e}",
             "error_type": "UnexpectedError",
+            "ecosystem": ecosystem,
             "package_name": package_name,
         }
 
 
 async def resolve_dependencies(
     package_name: str,
+    ecosystem: str = "pypi",
     python_version: Any = None,
     include_extras: list[str] | None = None,
     max_depth: int = 5,
@@ -187,6 +203,7 @@ async def resolve_dependencies(
 
     Args:
         package_name: Name of the root package.
+        ecosystem: Package ecosystem (default: 'pypi').
         python_version: Target Python version (optional).
         include_extras: Extra dependency groups to include (optional).
         max_depth: Maximum recursion depth (default: 5).
@@ -197,7 +214,7 @@ async def resolve_dependencies(
     # Convert python_version to string if it's a number
     if python_version is not None and not isinstance(python_version, str):
         python_version = str(python_version)
-    return await get_dependency_tree(package_name, max_depth=max_depth, python_version=python_version)
+    return await get_dependency_tree(package_name, ecosystem=ecosystem, max_depth=max_depth, python_version=python_version)
 
 
 def register(mcp: FastMCP) -> None:

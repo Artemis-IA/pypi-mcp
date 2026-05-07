@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "depcheck-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/home/imohamma/Documents/Dev/pypi-mcp", "python", "-m", "pypi_mcp.server", "--stdio"]
+    }
+  }
+}

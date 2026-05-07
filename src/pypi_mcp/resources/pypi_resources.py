@@ -1,23 +1,30 @@
-"""MCP resources for PyPI package information."""
+"""MCP resources for depcheck-mcp multi-ecosystem package information."""
 
 import logging
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from pypi_mcp.core import PyPIClient
-from pypi_mcp.core.osv_client import OSVClient
+from pypi_mcp.core import AbstractRegistryClient, OSVClient, PyPIClient
 
 logger = logging.getLogger(__name__)
 
 
-async def _get_package_metadata(package_name: str) -> dict[str, Any]:
-    """Fetch package metadata from PyPI."""
-    client = PyPIClient()
+def _get_client_for_ecosystem(ecosystem: str) -> AbstractRegistryClient:
+    """Get the appropriate registry client for an ecosystem."""
+    if ecosystem == "pypi":
+        return PyPIClient()
+    raise ValueError(f"Unsupported ecosystem: {ecosystem}")
+
+
+async def _get_package_metadata(ecosystem: str, package_name: str) -> dict[str, Any]:
+    """Fetch package metadata from the appropriate registry."""
+    client = _get_client_for_ecosystem(ecosystem)
     try:
         raw = await client.get_package_info(package_name)
         info = raw.get("info", {})
         return {
+            "ecosystem": ecosystem,
             "name": info.get("name"),
             "version": info.get("version"),
             "summary": info.get("summary"),
@@ -28,53 +35,56 @@ async def _get_package_metadata(package_name: str) -> dict[str, Any]:
             "project_urls": info.get("project_urls"),
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"ecosystem": ecosystem, "error": str(e)}
     finally:
         await client.close()
 
 
-async def _get_package_versions(package_name: str) -> dict[str, Any]:
-    """Fetch package versions from PyPI."""
-    client = PyPIClient()
+async def _get_package_versions(ecosystem: str, package_name: str) -> dict[str, Any]:
+    """Fetch package versions from the appropriate registry."""
+    client = _get_client_for_ecosystem(ecosystem)
     try:
         raw = await client.get_package_info(package_name)
         releases = raw.get("releases", {})
         return {
+            "ecosystem": ecosystem,
             "name": package_name,
             "latest": raw.get("info", {}).get("version"),
             "total_versions": len(releases),
             "versions": sorted(releases.keys(), reverse=True),
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"ecosystem": ecosystem, "error": str(e)}
     finally:
         await client.close()
 
 
-async def _get_package_dependencies(package_name: str) -> dict[str, Any]:
-    """Fetch package dependencies from PyPI."""
-    client = PyPIClient()
+async def _get_package_dependencies(ecosystem: str, package_name: str) -> dict[str, Any]:
+    """Fetch package dependencies from the appropriate registry."""
+    client = _get_client_for_ecosystem(ecosystem)
     try:
         raw = await client.get_package_info(package_name)
         info = raw.get("info", {})
         return {
+            "ecosystem": ecosystem,
             "name": info.get("name"),
             "version": info.get("version"),
             "requires_dist": info.get("requires_dist", []),
             "requires_python": info.get("requires_python"),
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"ecosystem": ecosystem, "error": str(e)}
     finally:
         await client.close()
 
 
-async def _get_package_security(package_name: str) -> dict[str, Any]:
+async def _get_package_security(ecosystem: str, package_name: str) -> dict[str, Any]:
     """Fetch security info from OSV."""
     osv = OSVClient()
     try:
-        vulns = await osv.query_vulnerabilities(package_name)
+        vulns = await osv.query_vulnerabilities(package_name, ecosystem=ecosystem.capitalize())
         return {
+            "ecosystem": ecosystem,
             "name": package_name,
             "vulnerabilities_count": len(vulns),
             "vulnerabilities": [
@@ -87,38 +97,38 @@ async def _get_package_security(package_name: str) -> dict[str, Any]:
             ],
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"ecosystem": ecosystem, "error": str(e)}
     finally:
         await osv.close()
 
 
 def register(mcp: FastMCP) -> None:
-    """Register PyPI resources."""
+    """Register depcheck resources."""
 
-    @mcp.resource(uri="pypi://package/{package_name}")
-    async def package_metadata(package_name: str) -> str:
-        """Package metadata from PyPI."""
-        data = await _get_package_metadata(package_name)
+    @mcp.resource(uri="depcheck://package/{ecosystem}/{package_name}")
+    async def package_metadata(ecosystem: str, package_name: str) -> str:
+        """Package metadata from the specified ecosystem."""
+        data = await _get_package_metadata(ecosystem, package_name)
         import json
         return json.dumps(data, indent=2)
 
-    @mcp.resource(uri="pypi://package/{package_name}/versions")
-    async def package_versions(package_name: str) -> str:
-        """Package version list from PyPI."""
-        data = await _get_package_versions(package_name)
+    @mcp.resource(uri="depcheck://package/{ecosystem}/{package_name}/versions")
+    async def package_versions(ecosystem: str, package_name: str) -> str:
+        """Package version list from the specified ecosystem."""
+        data = await _get_package_versions(ecosystem, package_name)
         import json
         return json.dumps(data, indent=2)
 
-    @mcp.resource(uri="pypi://package/{package_name}/dependencies")
-    async def package_dependencies(package_name: str) -> str:
-        """Package dependencies from PyPI."""
-        data = await _get_package_dependencies(package_name)
+    @mcp.resource(uri="depcheck://package/{ecosystem}/{package_name}/dependencies")
+    async def package_dependencies(ecosystem: str, package_name: str) -> str:
+        """Package dependencies from the specified ecosystem."""
+        data = await _get_package_dependencies(ecosystem, package_name)
         import json
         return json.dumps(data, indent=2)
 
-    @mcp.resource(uri="pypi://package/{package_name}/security")
-    async def package_security(package_name: str) -> str:
+    @mcp.resource(uri="depcheck://package/{ecosystem}/{package_name}/security")
+    async def package_security(ecosystem: str, package_name: str) -> str:
         """Package security report from OSV."""
-        data = await _get_package_security(package_name)
+        data = await _get_package_security(ecosystem, package_name)
         import json
         return json.dumps(data, indent=2)
